@@ -12,7 +12,7 @@ export default async function handler(req, res) {
 
     const url = process.env.UPSTASH_REDIS_REST_URL;
     const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-    const key = req.query.key;
+    const key = req.query?.key;
 
     if (!url || !token) {
       return res.status(500).json({ ok: false, message: 'Upstash env not set' });
