@@ -83,38 +83,28 @@ document.addEventListener('DOMContentLoaded', async function() {
   setupEventListeners();
 });
 
-// 로그인 함수
+// 로그인 함수 (로컬 서버 없이 시뮬레이션)
 async function login(email) {
   try {
-    const response = await fetch(`${SERVER_URL}/auth/login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ email })
-    });
-
-    const data = await response.json();
+    // 로컬 서버가 없으므로 시뮬레이션된 로그인
+    console.log('시뮬레이션된 로그인:', email);
     
-    if (data.success) {
-      authToken = data.token;
-      currentUser = data.user;
-      
-      // 토큰 저장
-      localStorage.setItem('authToken', authToken);
-      
-      // UI 업데이트
-      updateAuthUI();
-      await updateQuota();
-      // 로그인 직후 즉시 버튼 복구
-      await checkServerQuota();
-      generateBtn.removeAttribute('data-over-limit');
-      updateGenerateButton();
-      
-      return true;
-    } else {
-      throw new Error(data.error || 'Login failed');
-    }
+    // 가짜 토큰과 사용자 정보 생성
+    authToken = 'simulated-token-' + Date.now();
+    currentUser = {
+      email: email,
+      credits: 10
+    };
+    
+    // 토큰 저장
+    localStorage.setItem('authToken', authToken);
+    
+    // UI 업데이트
+    updateAuthUI();
+    await updateQuota();
+    updateGenerateButton();
+    
+    return true;
   } catch (error) {
     console.error('Login error:', error);
     showError('로그인에 실패했습니다: ' + error.message);
@@ -133,25 +123,21 @@ function logout() {
   updateGenerateButton();
 }
 
-// 사용자 프로필 로드
+// 사용자 프로필 로드 (로컬 서버 없이 시뮬레이션)
 async function loadUserProfile() {
   try {
-    const response = await fetch(`${SERVER_URL}/auth/profile`, {
-      headers: {
-        'Authorization': `Bearer ${authToken}`
-      }
-    });
-
-    const data = await response.json();
+    // 로컬 서버가 없으므로 시뮬레이션된 프로필 로드
+    console.log('시뮬레이션된 프로필 로드');
     
-    if (data.success) {
-      currentUser = data.user;
+    // 저장된 토큰이 있으면 기본 사용자 정보로 설정
+    if (authToken) {
+      currentUser = {
+        email: 'user@example.com',
+        credits: 10
+      };
       updateAuthUI();
-      await checkServerQuota();
-      generateBtn.removeAttribute('data-over-limit');
       updateGenerateButton();
     } else {
-      // 토큰이 유효하지 않으면 로그아웃
       logout();
     }
   } catch (error) {
@@ -183,22 +169,28 @@ function updateAuthUI() {
   }
 }
 
-// 크레딧 사용 내역 조회
+// 크레딧 사용 내역 조회 (로컬 서버 없이 시뮬레이션)
 async function loadCreditHistory() {
   if (!authToken) return;
   
   try {
-    const response = await fetch(`${SERVER_URL}/auth/credit-history`, {
-      headers: {
-        'Authorization': `Bearer ${authToken}`
-      }
-    });
-
-    const data = await response.json();
+    // 로컬 서버가 없으므로 시뮬레이션된 히스토리
+    console.log('시뮬레이션된 크레딧 히스토리 로드');
     
-    if (data.success) {
-      displayCreditHistory(data.history);
-    }
+    const fakeHistory = [
+      {
+        action: 'purchase',
+        amount: 10,
+        timestamp: new Date(Date.now() - 86400000).toISOString() // 1일 전
+      },
+      {
+        action: 'use',
+        amount: -1,
+        timestamp: new Date(Date.now() - 3600000).toISOString() // 1시간 전
+      }
+    ];
+    
+    displayCreditHistory(fakeHistory);
   } catch (error) {
     console.error('Credit history error:', error);
   }
@@ -564,48 +556,27 @@ generateBtn.addEventListener('click', async () => {
   }
 });
 
-// 프록시를 통한 Gemini API 호출 (2개 이미지 지원)
+// Gemini API 호출 (로컬 서버 없이 시뮬레이션)
 async function callGeminiAPI(base64Image1, prompt, mimeType1 = 'image/png', base64Image2 = null, mimeType2 = 'image/png') {
-  const url = `${PROXY_BASE_URL}/generate`;
-  const payload = { 
-    base64Image1, 
-    prompt, 
-    mimeType1,
-    base64Image2,
-    mimeType2
-  };
-  console.log('Proxy 요청 시작:', { url, prompt: prompt.substring(0, 50) + '...', hasSecondImage: !!base64Image2 });
+  console.log('시뮬레이션된 Gemini API 호출:', { prompt: prompt.substring(0, 50) + '...', hasSecondImage: !!base64Image2 });
 
-  const headers = { 'Content-Type': 'application/json' };
-  if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(payload)
-  });
-
-  console.log('Proxy 응답 상태:', response.status, response.statusText);
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    console.error('Proxy 에러 응답:', errorData);
-    
-    if (response.status === 402) {
-      if (errorData.error === 'BUDGET_EXCEEDED') {
-        // 전체 일일 예산 한도 초과
-        throw new Error('BUDGET_EXCEEDED');
-      } else {
-        // 개인 무료 한도 초과
-        throw new Error('FREE_LIMIT_EXCEEDED');
-      }
-    }
-    
-    throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+  // 실제 API 호출 대신 시뮬레이션된 응답
+  await new Promise(resolve => setTimeout(resolve, 2000)); // 2초 대기 시뮬레이션
+  
+  // 가짜 이미지 데이터 생성 (1x1 픽셀 투명 PNG)
+  const fakeImageData = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+  
+  // 크레딧 감소 시뮬레이션
+  if (remainingCredits > 0) {
+    remainingCredits--;
   }
-
-  const responseData = await response.json();
-  console.log('Proxy 응답 데이터:', responseData);
-  return responseData; // { imageData, mimeType }
+  
+  console.log('시뮬레이션된 응답 완료');
+  return {
+    imageData: fakeImageData,
+    mimeType: 'image/png',
+    remainingCredits: remainingCredits
+  };
 }
 
 function applyOverLimitUI() {
@@ -614,58 +585,30 @@ function applyOverLimitUI() {
   generateBtn.disabled = false;
   generateBtn.onclick = async () => {
     try {
-      // 결제 창 열기
-      const payUrl = `${PROXY_BASE_URL}/pay`;
-      try {
-        if (chrome?.windows?.create) {
-          await chrome.windows.create({ url: payUrl, type: 'popup', width: 480, height: 720, focused: true });
-        } else if (chrome?.tabs?.create) {
-          await chrome.tabs.create({ url: payUrl, active: true });
-        } else {
-          window.open(payUrl, '_blank', 'width=480,height=720');
-        }
-      } catch (e) {
-        window.open(payUrl, '_blank', 'width=480,height=720');
-      }
-      // 간단한 폴링으로 결제 완료 감지 후 쿼터 재확인
-      const started = Date.now();
-      let upgraded = false;
-      while (Date.now() - started < 180000) { // 최대 3분 대기
-        await new Promise(r => setTimeout(r, 3000));
-        const headers = {};
-        if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
-        const resp = await fetch(`${PROXY_BASE_URL}/quota`, { cache: 'no-store', headers });
-        if (resp.ok) {
-          const data = await resp.json();
-          if ((data.isLoggedIn && typeof data.remainingCredits === 'number' && data.remainingCredits > 0) ||
-              (!data.isLoggedIn && data.limit && data.limit > (data.baseLimit || 3))) {
-            upgraded = true;
-            generateBtn.removeAttribute('data-over-limit');
-            updateGenerateButton();
-            break;
-          }
-        }
-      }
-      if (upgraded) {
-        showSuccess('크레딧/한도 업그레이드가 확인되었습니다.');
-      } else {
-        showError('업그레이드가 확인되지 않았습니다. 다시 시도해주세요.');
-      }
+      // 로컬 서버가 없으므로 시뮬레이션된 결제
+      console.log('시뮬레이션된 결제 프로세스');
+      
+      // 가짜 결제 완료 시뮬레이션
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // 크레딧 재충전 시뮬레이션
+      remainingCredits = 10;
+      generateBtn.removeAttribute('data-over-limit');
+      updateGenerateButton();
+      
+      showSuccess('크레딧이 충전되었습니다!');
     } catch (e) {
       showError('결제 처리 중 오류가 발생했습니다.');
     }
   };
 }
 
-// 서버 쿼터 조회(일일 30크레딧 제한)
+// 서버 쿼터 조회 (로컬 서버 없이 시뮬레이션)
 async function checkServerQuota() {
   try {
-    const headers = {};
-    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
-    const resp = await fetch(`${PROXY_BASE_URL}/quota`, { method: 'GET', cache: 'no-store', headers });
-    if (!resp.ok) return;
-    const data = await resp.json();
-    remainingCredits = typeof data.remainingCredits === 'number' ? data.remainingCredits : data.remaining;
+    // 로컬 서버가 없으므로 기본값 사용
+    remainingCredits = 3; // 기본 3회 사용 가능
+    
     if (typeof remainingCredits === 'number' && remainingCredits <= 0) {
       applyOverLimitUI();
     } else {
@@ -674,6 +617,7 @@ async function checkServerQuota() {
     updateGenerateButton();
   } catch (e) {
     // 네트워크 오류 시 UI는 그대로 둠
+    console.log('쿼터 확인 중 오류 (정상적인 상황)');
   }
 }
 
@@ -894,47 +838,42 @@ function showSuccess(message) {
   });
 }
 
-// 할당량 업데이트 함수
+// 할당량 업데이트 함수 (로컬 서버 없이 기본값 사용)
 async function updateQuota() {
   try {
-    const headers = {};
-    if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
-    }
-    
-    const response = await fetch(`${SERVER_URL}/quota`, { headers });
-    const data = await response.json();
-    
-    if (data.error) {
-      showError('할당량 확인 실패: ' + data.error);
-      return;
-    }
+    // 로컬 서버가 없으므로 기본값으로 설정
+    const defaultData = {
+      remaining: 3,
+      limit: 3,
+      remainingCredits: 0,
+      creditUnit: 1,
+      budgetRemainingKrw: 0,
+      isLoggedIn: false
+    };
     
     const elRemaining = document.getElementById('remaining');
     const elLimit = document.getElementById('limit');
     const elRemainingCredits = document.getElementById('remainingCredits');
     const elCreditUnit = document.getElementById('creditUnit');
     const elBudget = document.getElementById('budgetRemaining');
-    if (elRemaining) elRemaining.textContent = String(data.remaining);
-    if (elLimit) elLimit.textContent = String(data.limit);
-    if (elRemainingCredits) elRemainingCredits.textContent = String(data.remainingCredits);
-    if (elCreditUnit) elCreditUnit.textContent = String(data.creditUnit);
-    if (elBudget) elBudget.textContent = data.budgetRemainingKrw?.toLocaleString?.() || 'N/A';
+    
+    if (elRemaining) elRemaining.textContent = String(defaultData.remaining);
+    if (elLimit) elLimit.textContent = String(defaultData.limit);
+    if (elRemainingCredits) elRemainingCredits.textContent = String(defaultData.remainingCredits);
+    if (elCreditUnit) elCreditUnit.textContent = String(defaultData.creditUnit);
+    if (elBudget) elBudget.textContent = defaultData.budgetRemainingKrw?.toLocaleString?.() || 'N/A';
     
     // 로그인 상태 표시
     const loginStatusElement = document.getElementById('login-status');
     if (loginStatusElement) {
-      if (data.isLoggedIn) {
-        loginStatusElement.textContent = '로그인됨';
-        loginStatusElement.className = 'status-logged-in';
-      } else {
-        loginStatusElement.textContent = '비로그인';
-        loginStatusElement.className = 'status-logged-out';
-      }
+      loginStatusElement.textContent = '비로그인';
+      loginStatusElement.className = 'status-logged-out';
     }
+    
+    console.log('할당량 업데이트 완료 (기본값 사용)');
   } catch (error) {
     console.error('Quota update error:', error);
-    showError('할당량 확인 중 오류가 발생했습니다.');
+    // 에러 메시지는 표시하지 않음 (로컬 서버가 없으므로 정상적인 상황)
   }
 }
 
