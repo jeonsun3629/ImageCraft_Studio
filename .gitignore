@@ -43,7 +43,7 @@ coverage/
 .DS_Store
 Thumbs.db
 
-# Vercel/Next (if used)
+# Vercel/Next
 .vercel/
 .next/
 .out/
@@ -52,4 +52,4 @@ Thumbs.db
 *.local
 
 # Test
-test.html
+server/test.html
