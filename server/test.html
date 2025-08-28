@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ImageCraft Studio - Firebase 크레딧 테스트</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', Arial, 'Noto Sans KR', sans-serif; background:#f5f5f7; padding: 24px; }
+    .card { max-width: 860px; margin: 0 auto; background:#fff; border:1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.06); }
+    .card .hd { padding: 18px 20px; border-bottom:1px solid #eef0f2; display:flex; align-items:center; justify-content:space-between; }
+    .card .bd { padding: 18px 20px; }
+    h1 { font-size: 18px; margin: 0; }
+    .row { display:flex; gap:12px; flex-wrap:wrap; margin-bottom: 12px; }
+    .row > .col { flex: 1 1 220px; min-width:220px; }
+    label { display:block; font-size:12px; color:#6b7280; margin: 6px 0; }
+    input { width: 100%; padding: 10px 12px; border:1px solid #d1d5db; border-radius: 8px; font-size:14px; }
+    .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top: 4px; }
+    button { padding:10px 14px; border:0; border-radius:8px; background:#4f46e5; color:#fff; cursor:pointer; }
+    button.secondary { background:#6b7280; }
+    button.danger { background:#ef4444; }
+    pre { background:#0f172a; color:#e5e7eb; padding:12px; border-radius:8px; overflow:auto; max-height:340px; }
+    .note { font-size:12px; color:#6b7280; margin-top:6px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="hd">
+      <h1>Firebase 크레딧 테스트</h1>
+      <small class="note">개발용. 배포 시 관리자 키 필수.</small>
+    </div>
+    <div class="bd">
+      <div class="row">
+        <div class="col">
+          <label>서버 주소</label>
+          <input id="server" placeholder="http://localhost:8787" value="http://localhost:8787" />
+        </div>
+        <div class="col">
+          <label>관리자 키 (ADMIN_TEST_KEY 설정 시 필수)</label>
+          <input id="adminKey" type="password" placeholder="관리자 키" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col">
+          <label>이메일</label>
+          <input id="email" type="email" placeholder="user@example.com" />
+        </div>
+        <div class="col">
+          <label>추가 크레딧</label>
+          <input id="amount" type="number" value="200" />
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="btnAdd">크레딧 추가</button>
+        <button id="btnGet" class="secondary">크레딧 조회</button>
+        <button id="btnReset" class="danger">크레딧 초기화(0)</button>
+        <button id="btnDelete" class="danger">사용자 삭제</button>
+      </div>
+
+      <p class="note">참고: 서버에 CORS가 활성화되어 있어야 합니다. 이 프로젝트는 기본적으로 CORS 허용입니다.</p>
+      <h3>결과</h3>
+      <pre id="out">Ready.</pre>
+    </div>
+  </div>
+
+  <script>
+    const out = document.getElementById('out');
+    function show(o){ out.textContent = typeof o === 'string' ? o : JSON.stringify(o, null, 2); }
+    function base(){ return document.getElementById('server').value.replace(/\/$/, ''); }
+    function email(){ return document.getElementById('email').value.trim(); }
+    function adminKey(){ return document.getElementById('adminKey').value.trim(); }
+    async function req(path, method, body){
+      const b = base();
+      const e = email();
+      const k = adminKey();
+      const headers = { 'Content-Type': 'application/json' };
+      const url = b + path + (method==='GET' ? ('?email=' + encodeURIComponent(e) + '&adminKey=' + encodeURIComponent(k)) : '');
+      const resp = await fetch(url, {
+        method,
+        headers,
+        body: method==='GET' ? undefined : JSON.stringify(Object.assign({ email: e, adminKey: k }, body || {}))
+      });
+      const data = await resp.json().catch(()=>({ ok:false, error:'INVALID_JSON' }));
+      if (!resp.ok) throw new Error(data?.error || ('HTTP_'+resp.status));
+      return data;
+    }
+
+    document.getElementById('btnAdd').onclick = async () => {
+      try {
+        const amount = Number(document.getElementById('amount').value || 0);
+        const r = await req('/admin/credits/add', 'POST', { amount });
+        show(r);
+      } catch(e){ show(String(e)); }
+    };
+
+    document.getElementById('btnGet').onclick = async () => {
+      try {
+        const r = await req('/admin/credits/get', 'GET');
+        show(r);
+      } catch(e){ show(String(e)); }
+    };
+
+    document.getElementById('btnReset').onclick = async () => {
+      try {
+        const r = await req('/admin/credits/reset', 'POST');
+        show(r);
+      } catch(e){ show(String(e)); }
+    };
+
+    document.getElementById('btnDelete').onclick = async () => {
+      try {
+        const r = await req('/admin/credits/delete-user', 'POST');
+        show(r);
+      } catch(e){ show(String(e)); }
+    };
+  </script>
+</body>
+</html>
+
+
