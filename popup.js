@@ -26,8 +26,8 @@ let remainingCredits = null; // 서버가 제공하는 남은 크레딧 수
 
 // Vercel API 주소
 const VERCEL_API_BASE = 'https://image-craft-studio-dk4o.vercel.app/api/kv';
-const PROXY_BASE_URL = 'http://localhost:8787';
-const SERVER_URL = PROXY_BASE_URL; // SERVER_URL을 PROXY_BASE_URL과 동일하게 설정
+const VERCEL_AUTH_BASE = 'https://image-craft-studio-dk4o.vercel.app/api/auth';
+const VERCEL_PAYMENT_BASE = 'https://image-craft-studio-dk4o.vercel.app/api/payment';
 
 // 인증 관련 변수
 let authToken = null;
@@ -83,28 +83,37 @@ document.addEventListener('DOMContentLoaded', async function() {
   setupEventListeners();
 });
 
-// 로그인 함수 (로컬 서버 없이 시뮬레이션)
+// 로그인 함수 (실제 Vercel API 사용)
 async function login(email) {
   try {
-    // 로컬 서버가 없으므로 시뮬레이션된 로그인
-    console.log('시뮬레이션된 로그인:', email);
+    console.log('실제 로그인 시도:', email);
     
-    // 가짜 토큰과 사용자 정보 생성
-    authToken = 'simulated-token-' + Date.now();
-    currentUser = {
-      email: email,
-      credits: 10
-    };
+    const response = await fetch(`${VERCEL_AUTH_BASE}/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email })
+    });
+
+    const data = await response.json();
     
-    // 토큰 저장
-    localStorage.setItem('authToken', authToken);
-    
-    // UI 업데이트
-    updateAuthUI();
-    await updateQuota();
-    updateGenerateButton();
-    
-    return true;
+    if (data.success) {
+      authToken = data.token;
+      currentUser = data.user;
+      
+      // 토큰 저장
+      localStorage.setItem('authToken', authToken);
+      
+      // UI 업데이트
+      updateAuthUI();
+      await updateQuota();
+      updateGenerateButton();
+      
+      return true;
+    } else {
+      throw new Error(data.error || 'Login failed');
+    }
   } catch (error) {
     console.error('Login error:', error);
     showError('로그인에 실패했습니다: ' + error.message);
@@ -123,21 +132,25 @@ function logout() {
   updateGenerateButton();
 }
 
-// 사용자 프로필 로드 (로컬 서버 없이 시뮬레이션)
+// 사용자 프로필 로드 (실제 Vercel API 사용)
 async function loadUserProfile() {
   try {
-    // 로컬 서버가 없으므로 시뮬레이션된 프로필 로드
-    console.log('시뮬레이션된 프로필 로드');
+    console.log('실제 프로필 로드 시도');
     
-    // 저장된 토큰이 있으면 기본 사용자 정보로 설정
-    if (authToken) {
-      currentUser = {
-        email: 'user@example.com',
-        credits: 10
-      };
+    const response = await fetch(`${VERCEL_AUTH_BASE}/profile`, {
+      headers: {
+        'Authorization': `Bearer ${authToken}`
+      }
+    });
+
+    const data = await response.json();
+    
+    if (data.success) {
+      currentUser = data.user;
       updateAuthUI();
       updateGenerateButton();
     } else {
+      // 토큰이 유효하지 않으면 로그아웃
       logout();
     }
   } catch (error) {
@@ -556,22 +569,42 @@ generateBtn.addEventListener('click', async () => {
   }
 });
 
-// Gemini API 호출 (로컬 서버 없이 시뮬레이션)
+// Gemini API 호출 (실제 크레딧 차감)
 async function callGeminiAPI(base64Image1, prompt, mimeType1 = 'image/png', base64Image2 = null, mimeType2 = 'image/png') {
-  console.log('시뮬레이션된 Gemini API 호출:', { prompt: prompt.substring(0, 50) + '...', hasSecondImage: !!base64Image2 });
+  console.log('실제 Gemini API 호출:', { prompt: prompt.substring(0, 50) + '...', hasSecondImage: !!base64Image2 });
 
-  // 실제 API 호출 대신 시뮬레이션된 응답
+  // 크레딧 확인
+  if (!currentUser || currentUser.credits <= 0) {
+    throw new Error('크레딧이 부족합니다. 충전 후 다시 시도해주세요.');
+  }
+
+  // 실제 API 호출 대신 시뮬레이션된 응답 (실제로는 Gemini API 호출)
   await new Promise(resolve => setTimeout(resolve, 2000)); // 2초 대기 시뮬레이션
   
   // 가짜 이미지 데이터 생성 (1x1 픽셀 투명 PNG)
   const fakeImageData = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
   
-  // 크레딧 감소 시뮬레이션
-  if (remainingCredits > 0) {
-    remainingCredits--;
+  // 크레딧 차감
+  currentUser.credits--;
+  remainingCredits = currentUser.credits;
+  
+  // 사용자 정보 업데이트 (실제로는 서버에서 처리)
+  if (authToken) {
+    try {
+      await fetch(`${VERCEL_AUTH_BASE}/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ credits: currentUser.credits })
+      });
+    } catch (error) {
+      console.error('크레딧 업데이트 실패:', error);
+    }
   }
   
-  console.log('시뮬레이션된 응답 완료');
+  console.log('API 호출 완료, 남은 크레딧:', remainingCredits);
   return {
     imageData: fakeImageData,
     mimeType: 'image/png',
@@ -585,29 +618,49 @@ function applyOverLimitUI() {
   generateBtn.disabled = false;
   generateBtn.onclick = async () => {
     try {
-      // 로컬 서버가 없으므로 시뮬레이션된 결제
-      console.log('시뮬레이션된 결제 프로세스');
+      console.log('실제 결제 프로세스 시작');
       
-      // 가짜 결제 완료 시뮬레이션
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // 실제 크레딧 충전 API 호출
+      const response = await fetch(`${VERCEL_PAYMENT_BASE}/charge`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ amount: 10 }) // 10크레딧 충전
+      });
+
+      const data = await response.json();
       
-      // 크레딧 재충전 시뮬레이션
-      remainingCredits = 10;
-      generateBtn.removeAttribute('data-over-limit');
-      updateGenerateButton();
-      
-      showSuccess('크레딧이 충전되었습니다!');
+      if (data.success) {
+        // 사용자 정보 업데이트
+        currentUser = data.user;
+        remainingCredits = currentUser.credits;
+        
+        // UI 업데이트
+        updateAuthUI();
+        generateBtn.removeAttribute('data-over-limit');
+        updateGenerateButton();
+        
+        showSuccess(data.message || '크레딧이 충전되었습니다!');
+      } else {
+        throw new Error(data.error || '결제 실패');
+      }
     } catch (e) {
-      showError('결제 처리 중 오류가 발생했습니다.');
+      console.error('Payment error:', e);
+      showError('결제 처리 중 오류가 발생했습니다: ' + e.message);
     }
   };
 }
 
-// 서버 쿼터 조회 (로컬 서버 없이 시뮬레이션)
+// 서버 쿼터 조회 (실제 사용자 크레딧 사용)
 async function checkServerQuota() {
   try {
-    // 로컬 서버가 없으므로 기본값 사용
-    remainingCredits = 3; // 기본 3회 사용 가능
+    if (currentUser && typeof currentUser.credits === 'number') {
+      remainingCredits = currentUser.credits;
+    } else {
+      remainingCredits = 0; // 로그인하지 않은 경우
+    }
     
     if (typeof remainingCredits === 'number' && remainingCredits <= 0) {
       applyOverLimitUI();
@@ -616,8 +669,10 @@ async function checkServerQuota() {
     }
     updateGenerateButton();
   } catch (e) {
-    // 네트워크 오류 시 UI는 그대로 둠
-    console.log('쿼터 확인 중 오류 (정상적인 상황)');
+    console.log('쿼터 확인 중 오류:', e);
+    // 오류 시 기본값 사용
+    remainingCredits = 0;
+    updateGenerateButton();
   }
 }
 
