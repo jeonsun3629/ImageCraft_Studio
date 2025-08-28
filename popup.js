@@ -24,13 +24,51 @@ let currentIp = null; // 더 이상 사용하지 않지만 남겨둠 (호환성)
 let currentIpUsageCount = 0; // 더 이상 사용하지 않지만 남겨둠 (호환성)
 let remainingCredits = null; // 서버가 제공하는 남은 크레딧 수
 
-// 프록시 서버 주소 (반드시 본인 서버 주소로 변경)
+// Vercel API 주소
+const VERCEL_API_BASE = 'https://image-craft-studio-dk4o.vercel.app/api/kv';
 const PROXY_BASE_URL = 'http://localhost:8787';
 const SERVER_URL = PROXY_BASE_URL; // SERVER_URL을 PROXY_BASE_URL과 동일하게 설정
 
 // 인증 관련 변수
 let authToken = null;
 let currentUser = null;
+
+// KV 저장소 함수들
+async function kvSet(key, value, ttlSec = 3600) {
+  try {
+    const response = await fetch(`${VERCEL_API_BASE}/set`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, value, ttlSec })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`KV SET failed: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return data.ok ? data.result : null;
+  } catch (error) {
+    console.error('KV SET error:', error);
+    return null;
+  }
+}
+
+async function kvGet(key) {
+  try {
+    const response = await fetch(`${VERCEL_API_BASE}/get?key=${encodeURIComponent(key)}`);
+    
+    if (!response.ok) {
+      throw new Error(`KV GET failed: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return data.ok ? data.value : null;
+  } catch (error) {
+    console.error('KV GET error:', error);
+    return null;
+  }
+}
 
 // 페이지 로드 시 저장된 토큰 확인
 document.addEventListener('DOMContentLoaded', async function() {
@@ -651,7 +689,16 @@ downloadBtn.addEventListener('click', async () => {
     generatedImageData = null;
     generatedImage.src = '';
     resultSection.style.display = 'none';
-    await chrome.storage.local.remove(['generatedImageData']);
+    // KV 저장소에서도 삭제
+    try {
+      await fetch(`${VERCEL_API_BASE}/set`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'generatedImageData', value: '', ttlSec: 1 }) // 1초 후 만료
+      });
+    } catch (error) {
+      console.error('KV 삭제 실패:', error);
+    }
     
     showSuccess('이미지가 다운로드되었습니다.');
   }
@@ -665,7 +712,16 @@ newGenerationBtn.addEventListener('click', async () => {
   // 생성된 이미지 삭제
   generatedImageData = null;
   generatedImage.src = '';
-  await chrome.storage.local.remove(['generatedImageData']);
+  // KV 저장소에서도 삭제
+  try {
+    await fetch(`${VERCEL_API_BASE}/set`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: 'generatedImageData', value: '', ttlSec: 1 }) // 1초 후 만료
+    });
+  } catch (error) {
+    console.error('KV 삭제 실패:', error);
+  }
   
   // 이미지는 유지하고 프롬프트만 초기화
   updateGenerateButton();
@@ -687,12 +743,13 @@ function hideError() {
 // 캡처된 스크린샷 확인
 async function checkForCapturedScreenshot() {
   try {
-    const result = await chrome.storage.local.get(['capturedScreenshot', 'captureTimestamp']);
+    const capturedScreenshot = await kvGet('capturedScreenshot');
+    const captureTimestamp = await kvGet('captureTimestamp');
     
-    if (result.capturedScreenshot && result.captureTimestamp) {
-      // 최근 30초 내에 캡처된 이미지인지 확인
-      const timeDiff = Date.now() - result.captureTimestamp;
-      if (timeDiff < 30000) { // 30초
+    if (capturedScreenshot && captureTimestamp) {
+      // 최근 5분 내에 캡처된 이미지인지 확인
+      const timeDiff = Date.now() - parseInt(captureTimestamp);
+      if (timeDiff < 300000) { // 5분
         console.log('새로운 캡처 발견:', { 
           hasFirstImage: currentScreenshots[0] !== null, 
           hasSecondImage: currentScreenshots[1] !== null 
@@ -701,8 +758,8 @@ async function checkForCapturedScreenshot() {
         // 순차적으로 이미지 저장: 첫 번째가 비어있으면 첫 번째에, 아니면 두 번째에
         if (currentScreenshots[0] === null) {
           // 첫 번째 슬롯에 저장
-          currentScreenshots[0] = result.capturedScreenshot;
-          screenshot1.src = result.capturedScreenshot;
+          currentScreenshots[0] = capturedScreenshot;
+          screenshot1.src = capturedScreenshot;
           screenshot1.style.display = 'block';
           screenshotPlaceholder1.style.display = 'none';
           clearImage1Btn.style.display = 'block';
@@ -710,8 +767,8 @@ async function checkForCapturedScreenshot() {
           console.log('첫 번째 슬롯에 저장됨');
         } else if (currentScreenshots[1] === null) {
           // 두 번째 슬롯에 저장
-          currentScreenshots[1] = result.capturedScreenshot;
-          screenshot2.src = result.capturedScreenshot;
+          currentScreenshots[1] = capturedScreenshot;
+          screenshot2.src = capturedScreenshot;
           screenshot2.style.display = 'block';
           screenshotPlaceholder2.style.display = 'none';
           clearImage2Btn.style.display = 'block';
@@ -719,8 +776,8 @@ async function checkForCapturedScreenshot() {
           console.log('두 번째 슬롯에 저장됨');
         } else {
           // 두 슬롯이 모두 차있으면 첫 번째를 교체
-          currentScreenshots[0] = result.capturedScreenshot;
-          screenshot1.src = result.capturedScreenshot;
+          currentScreenshots[0] = capturedScreenshot;
+          screenshot1.src = capturedScreenshot;
           screenshot1.style.display = 'block';
           screenshotPlaceholder1.style.display = 'none';
           clearImage1Btn.style.display = 'block';
@@ -728,8 +785,9 @@ async function checkForCapturedScreenshot() {
           console.log('첫 번째 슬롯 교체됨');
         }
         
-        // 캡처된 이미지 정보 삭제
-        await chrome.storage.local.remove(['capturedScreenshot', 'captureTimestamp']);
+        // 캡처된 이미지 정보 삭제 (TTL을 1초로 설정하여 즉시 만료)
+        await kvSet('capturedScreenshot', '', 1);
+        await kvSet('captureTimestamp', '', 1);
         
         // 이미지를 영구 저장
         await saveImages();
@@ -745,38 +803,44 @@ async function checkForCapturedScreenshot() {
 // 저장된 이미지 복원
 async function restoreSavedImages() {
   try {
-    const result = await chrome.storage.local.get(['savedImage1', 'savedImage2']);
+    // KV 저장소에서 이미지 복원
+    const savedImage1 = await kvGet('savedImage1');
+    const savedImage2 = await kvGet('savedImage2');
     
-    if (result.savedImage1) {
-      currentScreenshots[0] = result.savedImage1;
-      screenshot1.src = result.savedImage1;
+    if (savedImage1) {
+      currentScreenshots[0] = savedImage1;
+      screenshot1.src = savedImage1;
       screenshot1.style.display = 'block';
       screenshotPlaceholder1.style.display = 'none';
       clearImage1Btn.style.display = 'block';
-      console.log('첫 번째 이미지 복원됨');
+      console.log('첫 번째 이미지 복원됨 (KV)');
     }
     
-    if (result.savedImage2) {
-      currentScreenshots[1] = result.savedImage2;
-      screenshot2.src = result.savedImage2;
+    if (savedImage2) {
+      currentScreenshots[1] = savedImage2;
+      screenshot2.src = savedImage2;
       screenshot2.style.display = 'block';
       screenshotPlaceholder2.style.display = 'none';
       clearImage2Btn.style.display = 'block';
-      console.log('두 번째 이미지 복원됨');
+      console.log('두 번째 이미지 복원됨 (KV)');
     }
   } catch (error) {
     console.error('저장된 이미지 복원 실패:', error);
   }
 }
 
-// 이미지 저장 (확장프로그램 내부에 영구 저장)
+// 이미지 저장 (KV 저장소에 영구 저장)
 async function saveImages() {
   try {
-    await chrome.storage.local.set({
-      savedImage1: currentScreenshots[0],
-      savedImage2: currentScreenshots[1]
-    });
-    console.log('이미지 저장됨:', { 
+    // KV 저장소에 이미지 저장
+    if (currentScreenshots[0]) {
+      await kvSet('savedImage1', currentScreenshots[0], 86400); // 24시간 TTL
+    }
+    if (currentScreenshots[1]) {
+      await kvSet('savedImage2', currentScreenshots[1], 86400); // 24시간 TTL
+    }
+    
+    console.log('이미지 저장됨 (KV):', { 
       hasFirstImage: currentScreenshots[0] !== null, 
       hasSecondImage: currentScreenshots[1] !== null 
     });
@@ -788,10 +852,10 @@ async function saveImages() {
 // 생성된 이미지 저장
 async function saveGeneratedImage() {
   try {
-    await chrome.storage.local.set({
-      generatedImageData: generatedImageData
-    });
-    console.log('생성된 이미지 저장됨');
+    if (generatedImageData) {
+      await kvSet('generatedImageData', generatedImageData, 86400); // 24시간 TTL
+      console.log('생성된 이미지 저장됨 (KV)');
+    }
   } catch (error) {
     console.error('생성된 이미지 저장 실패:', error);
   }
@@ -800,13 +864,13 @@ async function saveGeneratedImage() {
 // 생성된 이미지 복원
 async function restoreGeneratedImage() {
   try {
-    const result = await chrome.storage.local.get(['generatedImageData']);
+    const savedGeneratedImage = await kvGet('generatedImageData');
     
-    if (result.generatedImageData) {
-      generatedImageData = result.generatedImageData;
+    if (savedGeneratedImage) {
+      generatedImageData = savedGeneratedImage;
       generatedImage.src = generatedImageData;
       resultSection.style.display = 'block';
-      console.log('생성된 이미지 복원됨');
+      console.log('생성된 이미지 복원됨 (KV)');
     }
   } catch (error) {
     console.error('생성된 이미지 복원 실패:', error);

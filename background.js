@@ -3,6 +3,30 @@ chrome.runtime.onInstalled.addListener(() => {
   console.log('ImageCraft Studio 확장프로그램이 설치되었습니다.');
 });
 
+// Vercel API 주소
+const VERCEL_API_BASE = 'https://image-craft-studio-dk4o.vercel.app/api/kv';
+
+// KV 저장소 함수들
+async function kvSet(key, value, ttlSec = 3600) {
+  try {
+    const response = await fetch(`${VERCEL_API_BASE}/set`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, value, ttlSec })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`KV SET failed: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return data.ok ? data.result : null;
+  } catch (error) {
+    console.error('KV SET error:', error);
+    return null;
+  }
+}
+
 // 메시지 리스너
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'captureScreenshot') {
@@ -73,11 +97,10 @@ async function captureSelectedArea(area) {
         
         const croppedDataUrl = canvas.toDataURL('image/png');
         
-        // 캡처된 이미지를 storage에 저장
-        await chrome.storage.local.set({ 
-          capturedScreenshot: croppedDataUrl,
-          captureTimestamp: Date.now()
-        });
+        // 캡처된 이미지를 KV 저장소에 저장
+        await kvSet('capturedScreenshot', croppedDataUrl, 300); // 5분 TTL
+        await kvSet('captureTimestamp', Date.now().toString(), 300); // 5분 TTL
+        
         // 캡처 완료 후 팝업 자동 열기
         await openExtensionPopup();
         
@@ -135,11 +158,9 @@ async function copyImageToExtension(request) {
     // 이미지 URL을 base64로 변환
     const imageDataUrl = await fetchImageAsDataURL(request.imageUrl);
     
-    // 확장프로그램 storage에 저장
-    await chrome.storage.local.set({ 
-      capturedScreenshot: imageDataUrl,
-      captureTimestamp: Date.now()
-    });
+    // 확장프로그램 KV 저장소에 저장
+    await kvSet('capturedScreenshot', imageDataUrl, 300); // 5분 TTL
+    await kvSet('captureTimestamp', Date.now().toString(), 300); // 5분 TTL
     // 이미지 복사 완료 후 팝업 자동 열기
     await openExtensionPopup();
     
