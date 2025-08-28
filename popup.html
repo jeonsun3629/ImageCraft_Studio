@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ImageCraft Studio</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>ImageCraft Studio</h1>
+      <p>스크린샷을 기반으로 이미지를 생성하세요</p>
+    </header>
+
+    <div class="main-content">
+      <!-- 스크린샷 섹션 -->
+      <div class="screenshot-section">
+        <h3>스크린샷 (최대 2장)</h3>
+        <div class="screenshots-container">
+          <!-- 첫 번째 이미지 -->
+          <div class="screenshot-item">
+            <div class="screenshot-header">
+              <h4>이미지 1</h4>
+              <button id="clear-image1-btn" class="btn-clear" style="display: none;">지우기</button>
+            </div>
+            <div class="screenshot-container">
+              <img id="screenshot1" src="" alt="스크린샷 1" style="display: none;">
+              <div id="screenshot-placeholder1" class="screenshot-placeholder">
+                <span>첫 번째 이미지</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 두 번째 이미지 -->
+          <div class="screenshot-item">
+            <div class="screenshot-header">
+              <h4>이미지 2 (선택사항)</h4>
+              <button id="clear-image2-btn" class="btn-clear" style="display: none;">지우기</button>
+            </div>
+            <div class="screenshot-container">
+              <img id="screenshot2" src="" alt="스크린샷 2" style="display: none;">
+              <div id="screenshot-placeholder2" class="screenshot-placeholder">
+                <span>두 번째 이미지 (선택사항)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="capture-buttons">
+          <button id="select-area-btn" class="btn btn-primary">이미지 감지 캡처</button>
+          <button id="clear-images-btn" class="btn btn-secondary">이미지 모두 지우기</button>
+        </div>
+      </div>
+
+      <!-- 인증 섹션 -->
+      <div id="auth-section" class="auth-section">
+        <!-- 로그인 폼 -->
+        <div id="login-form" class="login-form">
+          <h3>로그인</h3>
+          <div class="input-group">
+            <input type="email" id="email-input" placeholder="이메일 주소" required>
+            <button id="login-btn" type="button">로그인</button>
+          </div>
+          <p class="login-note">이메일로 간편 로그인하여 크레딧을 관리하세요</p>
+        </div>
+        
+        <!-- 사용자 정보 -->
+        <div id="user-info" class="user-info" style="display: none;">
+          <h3>사용자 정보</h3>
+          <div class="user-details">
+            <p><strong>이메일:</strong> <span id="user-email">-</span></p>
+            <p><strong>보유 크레딧:</strong> <span id="user-credits">0</span></p>
+          </div>
+          <button id="logout-btn" type="button">로그아웃</button>
+          <button id="history-btn" type="button">사용 내역</button>
+        </div>
+        
+        <!-- 크레딧 사용 내역 -->
+        <div id="credit-history" class="credit-history" style="display: none;">
+          <h3>크레딧 사용 내역</h3>
+          <div id="history-list"></div>
+          <button id="close-history-btn" type="button">닫기</button>
+        </div>
+      </div>
+
+      <!-- 프롬프트 섹션 -->
+      <div class="prompt-section">
+        <h3>프롬프트</h3>
+        <textarea 
+          id="prompt-input" 
+          placeholder="예: 첫 번째 이미지를 플라스틱 피규어 스타일로 변경해주세요, 두 번째 이미지의 배경을 전문 스튜디오 배경으로 변경해주세요, 두 이미지를 합성해서 새로운 이미지를 만들어주세요..."
+          rows="4"
+        ></textarea>
+        <div class="prompt-tips">
+          <details>
+            <summary>사용법 및 팁</summary>
+            <div class="usage-guide">
+              <h5>이미지 캡처 방법:</h5>
+              <ul>
+                <li><strong>이미지 캡처:</strong> "이미지 감지 캡처" 버튼을 클릭하고 웹페이지의 이미지를 클릭</li>
+                <li><strong>두 번째 이미지:</strong> 다른 이미지를 찾아서 다시 "이미지 감지 캡처" 버튼을 클릭</li>
+                <li><strong>자동 저장:</strong> 이미지는 자동으로 순차적으로 저장되며, 탭을 변경해도 유지됩니다</li>
+                <li><strong>개별 삭제:</strong> 각 이미지 옆의 "지우기" 버튼으로 개별 이미지를 삭제할 수 있습니다</li>
+                <li><strong>생성 조건:</strong> 최소 하나의 이미지와 프롬프트만 있으면 이미지 생성이 가능합니다</li>
+                <li><strong>크레딧:</strong> 10크레딧은 1장의 이미지를 생성할 수 있습니다</li>
+              </ul>
+              
+              <h5>2개 이미지 사용 팁:</h5>
+              <ul>
+                <li><strong>이미지 합성:</strong> "두 이미지를 합성해서 새로운 이미지를 만들어주세요"</li>
+                <li><strong>스타일 전이:</strong> "첫 번째 이미지의 스타일을 두 번째 이미지에 적용해주세요"</li>
+                <li><strong>비교 분석:</strong> "두 이미지의 차이점을 분석하고 개선된 버전을 만들어주세요"</li>
+                <li><strong>배경 교체:</strong> "첫 번째 이미지의 객체를 두 번째 이미지의 배경에 배치해주세요"</li>
+              </ul>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      
+
+      <!-- 생성 버튼 -->
+      <button id="generate-btn" class="btn btn-primary" disabled>이미지 생성</button>
+
+      <!-- 로딩 상태 -->
+      <div id="loading" class="loading" style="display: none;">
+        <div class="spinner"></div>
+        <p>이미지를 생성하고 있습니다...</p>
+      </div>
+
+      <!-- 결과 섹션 -->
+      <div id="result-section" class="result-section" style="display: none;">
+        <h3>생성된 이미지</h3>
+        <div class="result-container">
+          <img id="generated-image" src="" alt="생성된 이미지">
+          <div class="result-actions">
+            <button id="download-btn" class="btn btn-success with-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M12 3a1 1 0 0 1 1 1v8.586l2.293-2.293a1 1 0 1 1 1.414 1.414l-4 4a1 1 0 0 1-1.414 0l-4-4a1 1 0 0 1 1.414-1.414L11 12.586V4a1 1 0 0 1 1-1zM5 18a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1z"/>
+              </svg>
+              <span>다운로드</span>
+            </button>
+            <button id="new-generation-btn" class="btn btn-secondary with-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M17.65 6.35A7.95 7.95 0 0 0 12 4V2l-3 3 3 3V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.96-.69 2.8l1.48 1.48A7.96 7.96 0 0 0 20 12c0-2.21-.9-4.21-2.35-5.65zM6.35 17.65A7.95 7.95 0 0 0 12 20v2l3-3-3-3v2c-3.31 0-6-2.69-6-6 0-1.01.25-1.96.69-2.8L5.21 8.72A7.96 7.96 0 0 0 4 12c0 2.21.9 4.21 2.35 5.65z"/>
+              </svg>
+              <span>새로 생성</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 에러 메시지 -->
+      <div id="error-message" class="error-message" style="display: none;"></div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
