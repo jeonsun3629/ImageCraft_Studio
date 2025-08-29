@@ -1,140 +1,98 @@
-# ImageCraft Studio Chrome Extension
+# ImageCraft Studio
 
-Google의 Gemini 2.5 Flash Preview Image API를 사용하여 스크린샷을 기반으로 이미지를 생성하는 크롬 확장프로그램입니다.
+Chrome 확장 프로그램 기반 AI 이미지 생성 서비스
 
-## 주요 기능
+## 🏗️ 시스템 아키텍처
 
-1. **화면 스크린샷 기능**: 현재 활성 탭의 스크린샷을 캡처
-2. **자동 입력**: 캡처된 스크린샷이 확장프로그램에 자동으로 표시
-3. **프롬프트 입력**: 이미지 생성을 위한 텍스트 프롬프트 입력
-4. **API 연동**: Gemini 2.5 Flash Preview Image API를 사용한 이미지 생성
-5. **결과 표시**: 생성된 이미지를 확장프로그램에서 확인
-6. **다운로드**: 생성된 이미지를 로컬에 저장
+### Redis 키 패턴
 
-## 설치 방법
-
-### 1. Firebase 프로젝트 설정
-1. [Firebase Console](https://console.firebase.google.com/)에서 새 프로젝트 생성
-2. **Authentication** 활성화 (이메일/비밀번호)
-3. **Firestore Database** 생성
-4. **Project Settings** → **Service accounts** → **Generate new private key** 다운로드
-5. 다운로드한 JSON 파일의 내용을 환경변수로 설정
-
-### 2. 프로젝트 다운로드
-```bash
-git clone [repository-url]
-cd nanoBextention
+#### **사용량 추적**
+```
+quota:YYYYMMDD:IP
+예: quota:20241201:192.168.1.1 = "3"
+설명: 일일 IP별 사용량 (24시간 TTL)
 ```
 
-### 3. 환경변수 설정
-```bash
-cd server
-cp env.example .env
+#### **사용자 크레딧**
+```
+credits:email
+예: credits:user@example.com = "150"
+설명: 사용자별 크레딧 (Firebase와 동기화)
 ```
 
-`.env` 파일을 편집하여 다음 정보를 입력:
-- `GEMINI_API_KEY`: Google Gemini API 키
-- `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`: PayPal Live 계정 정보
-- `JWT_SECRET`: JWT 토큰 암호화 키
-- Firebase 서비스 계정 정보 (JSON 파일에서 추출)
+#### **결제 상태**
+```
+paid:YYYYMMDD:IP
+예: paid:20241201:192.168.1.1 = "1"
+설명: 일일 결제 완료 상태 (24시간 TTL)
+```
 
-### 4. 의존성 설치
+#### **일일 예산**
+```
+budget:YYYYMMDD
+예: budget:20241201 = "5000"
+설명: 일일 전체 예산 사용량 (24시간 TTL)
+```
+
+### 데이터 흐름
+
+#### **로그인 사용자**
+1. Firebase에서 크레딧 조회
+2. 크레딧 > 0: 크레딧 차감 (Firebase)
+3. 크레딧 = 0: IP 기반 무료 한도 (Redis)
+
+#### **비로그인 사용자**
+1. Redis에서 IP 기반 사용량 조회
+2. 일일 한도 체크 (Redis)
+3. 예산 체크 (Redis)
+
+### 환경 변수
+
+```bash
+# Redis
+REDIS_URL=rediss://default:password@host:port
+
+# Firebase
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n..."
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk@project.iam.gserviceaccount.com
+
+# Google Gemini
+GEMINI_API_KEY=your-gemini-api-key
+
+# PayPal
+PAYPAL_CLIENT_ID=your-paypal-client-id
+PAYPAL_CLIENT_SECRET=your-paypal-client-secret
+PAYPAL_ENV=live
+
+# 예산 설정
+DAILY_LIMIT=3
+DAILY_BUDGET_KRW=160
+COST_PER_CALL_KRW=1
+```
+
+## 🚀 배포
+
+### Vercel 배포
+```bash
+vercel --prod
+```
+
+### 로컬 개발
 ```bash
 cd server
 npm install
+npm run dev
 ```
 
-### 5. Chrome 확장프로그램 설치
-1. Chrome 브라우저에서 `chrome://extensions/` 접속
-2. 우측 상단의 "개발자 모드" 토글 활성화
-3. "압축해제된 확장프로그램을 로드합니다" 버튼 클릭
-4. 프로젝트 폴더 선택
+## 🔧 문제 해결
 
-## 사용 방법
+### Redis 연결 문제
+1. `REDIS_URL` 환경 변수 확인
+2. Redis 서비스 상태 확인
+3. 네트워크 연결 확인
 
-### 1. API 키 설정
-1. [Google AI Studio](https://aistudio.google.com/)에서 Gemini API 키 발급
-2. 확장프로그램 팝업에서 API 키 입력
-3. "API 키 저장" 버튼 클릭
-
-### 2. 이미지 생성
-1. 확장프로그램 아이콘 클릭하여 팝업 열기
-2. "스크린샷 캡처" 버튼 클릭하여 현재 페이지 스크린샷
-3. 프롬프트 입력란에 원하는 이미지 설명 입력
-4. "이미지 생성" 버튼 클릭
-5. 생성 완료 후 "다운로드" 버튼으로 이미지 저장
-
-## 파일 구조
-
-```
-nanoBextention/
-├── manifest.json          # 확장프로그램 설정 파일
-├── popup.html            # 팝업 UI
-├── popup.css             # 팝업 스타일
-├── popup.js              # 팝업 로직
-├── background.js         # 백그라운드 서비스 워커
-├── content.js            # 콘텐츠 스크립트
-
-├── icons/                # 아이콘 폴더
-│   ├── icon16.png
-│   ├── icon48.png
-│   └── icon128.png
-└── README.md             # 프로젝트 설명서
-```
-
-## 기술 스택
-
-- **Frontend**: HTML5, CSS3, JavaScript (ES6+)
-- **Chrome Extension API**: Manifest V3
-- **AI API**: Google Gemini 2.5 Flash Preview Image API
-- **이미지 처리**: Canvas API, Base64 인코딩
-
-## API 설정
-
-### Gemini API 키 발급
-1. [Google AI Studio](https://aistudio.google.com/) 접속
-2. Google 계정으로 로그인
-3. API 키 생성 및 복사
-4. 확장프로그램에 입력
-
-### API 사용량
-- Gemini 2.5 Flash Preview Image API는 현재 프리뷰 단계
-- 사용량 제한 및 비용이 발생할 수 있음
-- [Google AI Studio 가격 정책](https://aistudio.google.com/pricing) 참조
-
-## 주의사항
-
-1. **API 키 보안**: API 키는 로컬 저장소에 암호화되지 않은 상태로 저장됩니다
-2. **이미지 품질**: 생성된 이미지의 품질은 프롬프트와 원본 스크린샷에 따라 달라집니다
-3. **네트워크 연결**: 이미지 생성 시 인터넷 연결이 필요합니다
-4. **브라우저 호환성**: Chrome 브라우저에서만 작동합니다
-
-## 문제 해결
-
-### 스크린샷 캡처 실패
-- 확장프로그램에 `activeTab` 권한이 있는지 확인
-- Chrome 확장프로그램 페이지에서는 캡처가 제한될 수 있음
-
-### API 호출 실패
-- API 키가 올바르게 설정되었는지 확인
-- 네트워크 연결 상태 확인
-- API 사용량 한도 확인
-
-### 이미지 생성 실패
-- 프롬프트가 명확하고 구체적인지 확인
-- 원본 스크린샷의 품질 확인
-- API 응답 시간이 길어질 수 있으므로 기다려주세요
-
-## 개발 정보
-
-- **버전**: 1.0.0
-- **최종 업데이트**: 2024년
-- **라이선스**: MIT License
-
-## 기여하기
-
-버그 리포트나 기능 제안은 이슈로 등록해주세요.
-
-## 라이선스
-
-이 프로젝트는 MIT 라이선스 하에 배포됩니다.
+### Firebase 연결 문제
+1. 서비스 계정 키 확인
+2. 프로젝트 ID 확인
+3. 권한 설정 확인

@@ -34,12 +34,26 @@ if (!GEMINI_API_KEY) {
 
 let redis = null;
 if (REDIS_URL) {
-  redis = new Redis(REDIS_URL, {
-    lazyConnect: true,
-    maxRetriesPerRequest: 3
-  });
-  redis.on('error', (err) => console.error('[redis] error', err));
-  redis.connect().catch((e) => console.error('[redis] connect failed', e));
+  try {
+    redis = new Redis(REDIS_URL, {
+      lazyConnect: true,
+      maxRetriesPerRequest: 3,
+      retryDelayOnFailover: 100,
+      enableReadyCheck: true,
+      maxRetriesPerRequest: 3
+    });
+    
+    redis.on('error', (err) => console.error('[redis] error:', err));
+    redis.on('connect', () => console.log('[redis] connected'));
+    redis.on('ready', () => console.log('[redis] ready'));
+    redis.on('close', () => console.log('[redis] connection closed'));
+    
+    await redis.connect();
+    console.log('[redis] connection established successfully');
+  } catch (e) {
+    console.error('[redis] connection failed:', e);
+    redis = null;
+  }
 } else {
   console.warn('[warn] REDIS_URL not set. Falling back to in-memory counter (single-instance only).');
 }
@@ -55,6 +69,7 @@ function getClientKey(req) {
   return req.ip || req.connection?.remoteAddress || 'unknown';
 }
 
+// Redis 키 패턴 표준화
 function getTodayKey(ip) {
   const d = new Date();
   const y = d.getUTCFullYear();
@@ -63,8 +78,8 @@ function getTodayKey(ip) {
   return `quota:${y}${m}${day}:${ip}`;
 }
 
-function getCreditsKey(ip) {
-  return `credits:${ip}`;
+function getCreditsKey(email) {
+  return `credits:${email}`;
 }
 
 function getPaidKey(ip) {
@@ -83,7 +98,8 @@ function getBudgetKey() {
   return `budget:${y}${m}${day}`;
 }
 
-async function incrAndGetRemaining(email, effectiveLimit) {
+// 수정된 함수: req 파라미터 추가
+async function incrAndGetRemaining(req, email, effectiveLimit) {
   const credits = await getCredits(email);
   if (credits > 0) {
     // 크레딧이 있으면 크레딧 차감 (10크레딧 차감)
@@ -124,12 +140,15 @@ async function incrAndGetRemaining(email, effectiveLimit) {
   }
 }
 
-async function getRemaining(ip, effectiveLimit) {
-  const credits = await getCredits(ip);
-  if (credits > 0) {
-    return credits; // 크레딧이 있으면 크레딧 반환
+// 수정된 함수: 로직 개선
+async function getRemaining(req, email, effectiveLimit) {
+  if (email) {
+    // 로그인된 사용자: Firebase에서 크레딧 조회
+    const credits = await getCredits(email);
+    return credits;
   } else {
-    // 크레딧이 없으면 일일 무료 한도 확인
+    // 비로그인 사용자: Redis에서 IP 기반 사용량 조회
+    const ip = getClientKey(req);
     const key = getTodayKey(ip);
     if (redis) {
       const count = Number((await redis.get(key)) || 0);
@@ -326,7 +345,6 @@ app.get('/health', (req, res) => {
 app.get('/quota', optionalAuth, async (req, res) => {
   try {
     const email = req.user?.email;
-    const ip = getClientKey(req);
     
     let effectiveLimit, remaining, credits;
     
@@ -338,14 +356,7 @@ app.get('/quota', optionalAuth, async (req, res) => {
     } else {
       // 비로그인 사용자: IP 기반 무료 한도
       effectiveLimit = DAILY_LIMIT;
-      const key = getTodayKey(ip);
-      if (redis) {
-        const count = Number((await redis.get(key)) || 0);
-        remaining = Math.max(effectiveLimit - count, 0);
-      } else {
-        const item = memoryStore.get(key);
-        remaining = Math.max(effectiveLimit - (item?.count || 0), 0);
-      }
+      remaining = await getRemaining(req, null, effectiveLimit);
       credits = 0;
     }
     
@@ -1062,14 +1073,7 @@ app.post('/generate', optionalAuth, async (req, res) => {
     } else {
       // 비로그인 또는 크레딧 없음: IP 기반 무료 한도와 예산 적용
       effectiveLimit = DAILY_LIMIT;
-      const key = getTodayKey(ip);
-      if (redis) {
-        const count = Number((await redis.get(key)) || 0);
-        remainingBefore = Math.max(effectiveLimit - count, 0);
-      } else {
-        const item = memoryStore.get(key);
-        remainingBefore = Math.max(effectiveLimit - (item?.count || 0), 0);
-      }
+      remainingBefore = await getRemaining(req, email, effectiveLimit);
     }
     
     if (remainingBefore <= 0) {

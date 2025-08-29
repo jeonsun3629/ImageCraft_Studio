@@ -25,9 +25,11 @@ let currentIpUsageCount = 0; // 더 이상 사용하지 않지만 남겨둠 (호
 let remainingCredits = null; // 서버가 제공하는 남은 크레딧 수
 
 // Vercel API 주소
-const VERCEL_API_BASE = 'https://image-craft-studio-dk4o.vercel.app/api/kv';
-const VERCEL_AUTH_BASE = 'https://image-craft-studio-dk4o.vercel.app/api/auth';
-const VERCEL_PAYMENT_BASE = 'https://image-craft-studio-dk4o.vercel.app/api/payment';
+const VERCEL_BASE = 'https://image-craft-studio-dk4o.vercel.app';
+const VERCEL_API_BASE = `${VERCEL_BASE}/api/kv`;
+const VERCEL_AUTH_BASE = `${VERCEL_BASE}/api/auth`;
+const VERCEL_PAYMENT_BASE = `${VERCEL_BASE}/api/payment`;
+const VERCEL_GENERATE_BASE = `${VERCEL_BASE}/generate`;
 
 // 인증 관련 변수
 let authToken = null;
@@ -569,46 +571,38 @@ generateBtn.addEventListener('click', async () => {
   }
 });
 
-// Gemini API 호출 (실제 크레딧 차감)
+// Gemini API 호출 (실제 서버 API 호출)
 async function callGeminiAPI(base64Image1, prompt, mimeType1 = 'image/png', base64Image2 = null, mimeType2 = 'image/png') {
-  console.log('실제 Gemini API 호출:', { prompt: prompt.substring(0, 50) + '...', hasSecondImage: !!base64Image2 });
+  console.log('실제 서버 API 호출:', { prompt: prompt.substring(0, 50) + '...', hasSecondImage: !!base64Image2 });
 
-  // 크레딧 확인
-  if (!currentUser || currentUser.credits <= 0) {
-    throw new Error('크레딧이 부족합니다. 충전 후 다시 시도해주세요.');
+  // 서버 API 엔드포인트 호출
+  const response = await fetch(VERCEL_GENERATE_BASE, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(authToken && { 'Authorization': `Bearer ${authToken}` })
+    },
+    body: JSON.stringify({
+      base64Image1,
+      base64Image2,
+      prompt,
+      mimeType1,
+      mimeType2
+    })
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `HTTP ${response.status}`);
   }
 
-  // 실제 API 호출 대신 시뮬레이션된 응답 (실제로는 Gemini API 호출)
-  await new Promise(resolve => setTimeout(resolve, 2000)); // 2초 대기 시뮬레이션
+  const data = await response.json();
   
-  // 가짜 이미지 데이터 생성 (1x1 픽셀 투명 PNG)
-  const fakeImageData = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
-  
-  // 크레딧 차감
-  currentUser.credits--;
-  remainingCredits = currentUser.credits;
-  
-  // 사용자 정보 업데이트 (실제로는 서버에서 처리)
-  if (authToken) {
-    try {
-      await fetch(`${VERCEL_AUTH_BASE}/profile`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`
-        },
-        body: JSON.stringify({ credits: currentUser.credits })
-      });
-    } catch (error) {
-      console.error('크레딧 업데이트 실패:', error);
-    }
-  }
-  
-  console.log('API 호출 완료, 남은 크레딧:', remainingCredits);
+  console.log('서버 API 호출 완료, 남은 크레딧:', data.remainingCredits);
   return {
-    imageData: fakeImageData,
-    mimeType: 'image/png',
-    remainingCredits: remainingCredits
+    imageData: data.imageData,
+    mimeType: data.mimeType,
+    remainingCredits: data.remainingCredits
   };
 }
 
@@ -653,20 +647,37 @@ function applyOverLimitUI() {
   };
 }
 
-// 서버 쿼터 조회 (실제 사용자 크레딧 사용)
+// 서버 쿼터 조회 (실제 서버 API 호출)
 async function checkServerQuota() {
   try {
-    if (currentUser && typeof currentUser.credits === 'number') {
-      remainingCredits = currentUser.credits;
+    // 서버에서 실제 쿼터 정보 조회
+    const response = await fetch(`${VERCEL_BASE}/quota`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authToken && { 'Authorization': `Bearer ${authToken}` })
+      }
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      remainingCredits = data.remainingCredits || 0;
+      
+      // 로그인 사용자 정보 업데이트
+      if (data.isLoggedIn && currentUser) {
+        currentUser.credits = data.remainingCredits;
+      }
+      
+      if (remainingCredits <= 0) {
+        applyOverLimitUI();
+      } else {
+        generateBtn.removeAttribute('data-over-limit');
+      }
     } else {
-      remainingCredits = 0; // 로그인하지 않은 경우
+      console.error('쿼터 조회 실패:', response.status);
+      remainingCredits = 0;
     }
     
-    if (typeof remainingCredits === 'number' && remainingCredits <= 0) {
-      applyOverLimitUI();
-    } else {
-      generateBtn.removeAttribute('data-over-limit');
-    }
     updateGenerateButton();
   } catch (e) {
     console.log('쿼터 확인 중 오류:', e);
