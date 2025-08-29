@@ -33,29 +33,32 @@ if (!GEMINI_API_KEY) {
 }
 
 let redis = null;
-if (REDIS_URL) {
-  try {
-    redis = new Redis(REDIS_URL, {
-      lazyConnect: true,
-      maxRetriesPerRequest: 3,
-      retryDelayOnFailover: 100,
-      enableReadyCheck: true,
-      maxRetriesPerRequest: 3
-    });
-    
-    redis.on('error', (err) => console.error('[redis] error:', err));
-    redis.on('connect', () => console.log('[redis] connected'));
-    redis.on('ready', () => console.log('[redis] ready'));
-    redis.on('close', () => console.log('[redis] connection closed'));
-    
-    await redis.connect();
-    console.log('[redis] connection established successfully');
-  } catch (e) {
-    console.error('[redis] connection failed:', e);
-    redis = null;
+
+// Redis 연결 함수
+async function initializeRedis() {
+  if (REDIS_URL) {
+    try {
+      redis = new Redis(REDIS_URL, {
+        lazyConnect: true,
+        maxRetriesPerRequest: 3,
+        retryDelayOnFailover: 100,
+        enableReadyCheck: true
+      });
+      
+      redis.on('error', (err) => console.error('[redis] error:', err));
+      redis.on('connect', () => console.log('[redis] connected'));
+      redis.on('ready', () => console.log('[redis] ready'));
+      redis.on('close', () => console.log('[redis] connection closed'));
+      
+      await redis.connect();
+      console.log('[redis] connection established successfully');
+    } catch (e) {
+      console.error('[redis] connection failed:', e);
+      redis = null;
+    }
+  } else {
+    console.warn('[warn] REDIS_URL not set. Falling back to in-memory counter (single-instance only).');
   }
-} else {
-  console.warn('[warn] REDIS_URL not set. Falling back to in-memory counter (single-instance only).');
 }
 
 // In-memory fallback store (for local dev only)
@@ -1198,9 +1201,23 @@ app.use((req, res) => {
   res.status(404).json({ error: 'NOT_FOUND' });
 });
 
-app.listen(PORT, () => {
-  console.log(`proxy listening on :${PORT}`);
-});
+// 서버 시작
+async function startServer() {
+  try {
+    // Redis 초기화
+    await initializeRedis();
+    
+    // 서버 시작
+    app.listen(PORT, () => {
+      console.log(`proxy listening on :${PORT}`);
+    });
+  } catch (error) {
+    console.error('Server startup failed:', error);
+    process.exit(1);
+  }
+}
+
+startServer();
 
 
 
